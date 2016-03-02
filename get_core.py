@@ -62,6 +62,48 @@ def read_data(fname):
     f.close()
     return out_array
 
+def read_input(fname):
+    def read_value(l):
+        vals = l.split('=')[-1]
+        v,v_err = vals.split('+-')
+        return np.double(v),np.double(v_err)
+    f = open(fname,'r')
+    output_array = 12*[[]]
+    while True:
+        line = f.readline()
+        if line == '':
+           break
+        else:
+           if line[0] == '|':
+               if 'Name' in line:
+                   output_array[11] = ''.join(((line.split('=')[-1]).split('\n')[0]).split())
+               elif 'System Age' in line:
+                   output_array[0],output_array[1] = read_value(line)
+               elif 'Luminosity' in line:
+                   output_array[2],output_array[3] = read_value(line)
+               elif 'Planet Mass' in line:
+                   output_array[4],output_array[5] = read_value(line)
+               elif 'Planet Radius' in line:
+                   output_array[6],output_array[7] = read_value(line)
+               elif 'Planet-Star' in line:
+                   output_array[8],output_array[9] = read_value(line)
+               elif 'Number of simulations' in line:
+                   output_array[10] = np.int(line.split('=')[-1])
+               else:
+                   print '\t WARNING: Input value:'
+                   print '\t '+line
+                   print '\t not used/understood!'
+    return output_array
+
+def save_results(pname,vals):
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    fname = 'results/'+pname+'_mc_simulations.dat'
+    fout = open(fname,'w')
+    for i in range(len(vals)):
+        fout.write(str(vals[i])+'\n')
+    fout.close()
+
 print '\n'
 print '\t #########################################  '
 print '\t ##   Giant Planet Cores (GPCs) v.1.0.  ##  '
@@ -86,11 +128,11 @@ distances_numbers = [0.02,0.045,0.1,1.0,9.5]
 # Start the code:
 print '\t >> 1. Checking models...'
 if not os.path.exists('models'):
-    print '\t Models not found. Downloading them from J. Fortney webpage...'
+    print '\t    Models not found. Downloading them from J. Fortney webpage...'
     get_models(core_masses,distances)
-    print '\t Done!\n'
+    print '\t    Done!\n'
 else:
-    print '\t Model folder found!\n'
+    print '\t    Model folder found!\n'
 print '\t >> 2. Extracting data...'
 
 # Extract data. The final full_data array has 6 dimensions,
@@ -122,7 +164,6 @@ for i in range(len(distances)):
         if distance == 'point02AU' and core_mass == '00b':
             core_mass = '00c'
 
-        print distance,core_mass
         data = read_data('models/tbl_Evpcore_'+core_mass+'_'+distance+'.dat')    
         if first_time:
             full_data = np.zeros([data.shape[0],data.shape[1]+2])
@@ -137,9 +178,13 @@ for i in range(len(distances)):
             f_data[:,data.shape[1]+1] = np.ones(data.shape[0])*core_masses_numbers[j]
             full_data = np.vstack((full_data,f_data))
 
-print '\t Done!\n'
+print '\t    Done!\n'
 
-print '\t >> 3. Sampling core masses...'
+print '\t >> 3. Reading data...'
+age,age_err,L,L_err,Mp,Mp_err,Rp,Rp_err,a,a_err,nsims,pname = read_input('input_data.gpc')
+print '\t    Done!\n'
+
+print '\t >> 4. Sampling core masses for planet '+pname+'...'
 from scipy.interpolate import griddata
 points = np.zeros([full_data.shape[0],4])
 points[:,0] = full_data[:,0]  # Times in Gyr of the system
@@ -147,17 +192,29 @@ points[:,1] = full_data[:,2]  # Planet mass in Mj
 points[:,2] = full_data[:,3]  # Planet radius in Rj
 points[:,3] = full_data[:,4]  # System distance from central star (assumed solar) in AU
 values = full_data[:,5]       # Core mass in Earth units
-print 't,Mj,Rj,dist'
-print points
-print 'core mass'
-print values
 
-t = 2.0#1.0#4.5
-m = 0.356#3.146#0.837
-r = 0.718#1.217#1.065
-d = 0.04288#0.02#0.03048
+print '\t    Monte-carloing input values '+str(int(nsims))+' times...'
 
-grid = griddata(points, values, (t,m,r,d), method='linear')
-print grid
+# Monte-carlo the age, mass, radius and distance of the planet...
+t = np.random.normal(age,age_err,nsims)
+m = np.random.normal(Mp,Mp_err,nsims)
+r = np.random.normal(Rp,Rp_err,nsims)
+d = np.random.normal(a,a_err,nsims)
 
+# Monte-carlo the luminosity of the star and generate the equivalent
+# distance to a solar-type star of the planet:
+l = np.random.normal(L,L_err,nsims)
+dsun = d*np.sqrt(1./l)
+
+print '\t    Interpolating table...'
+vals = griddata(points, values, (t,m,r,dsun), method='linear')
+idx = -np.isnan(vals)
+vals = vals[idx]
+print '\t    Done!\n'
+print '\t >> 5. Saving results...'
+save_results(pname,vals)
+cm = np.median(vals)
+cm_err = np.sqrt(np.var(vals))
+print "\t    Planet core simulations saved under the 'results' folder"
+print '\t    The planet has a core mass of {0:2.2f} +- {1:2.2f} MEarth'.format(cm,cm_err)
 print '\n'
