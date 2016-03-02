@@ -22,7 +22,7 @@ def get_models(core_masses,distances):
     os.chdir('models')
     for distance in distances:
         for core_mass in core_masses:
-            if distance == 'point02AU':
+            if distance == 'point02AU' and core_mass == '00b':
                 core_mass = '00c'
             p = subprocess.Popen('wget http://www.ucolick.org/~jfortney/models/tbl_Evpcore_'+\
                             core_mass+'_'+distance+'.dat',stdout = subprocess.PIPE, stderr = subprocess.PIPE,shell = True)
@@ -78,8 +78,8 @@ print '\t  acknowledge the work put on this code.    '
 print '\n'
 
 # Define core masses to extract (in Mearth) along with distances (in AU):
-core_masses = ['00b','10a','25a','50a','100a']
-core_masses_numbers = [0.,10.,25.,50.,100.]
+core_masses = ['00b','10a','25a','50a','100a']#['10a','25a','50a','100a']#['00b','10a','25a','50a','100a']
+core_masses_numbers = [0.,10.,25.,50.,100.]#[10.,25.,50.,100.]#[0.,10.,25.,50.,100.]
 distances = ['point02AU','point045AU','point1AU','1AU','9point5AU']
 distances_numbers = [0.02,0.045,0.1,1.0,9.5]
 
@@ -119,36 +119,45 @@ for i in range(len(distances)):
     distance = distances[i]
     for j in range(len(core_masses)):
         core_mass = core_masses[j]
-        if distance == 'point02AU':
+        if distance == 'point02AU' and core_mass == '00b':
             core_mass = '00c'
 
+        print distance,core_mass
         data = read_data('models/tbl_Evpcore_'+core_mass+'_'+distance+'.dat')    
         if first_time:
             full_data = np.zeros([data.shape[0],data.shape[1]+2])
             full_data[:,0:data.shape[1]] = data
             full_data[:,data.shape[1]] = np.ones(data.shape[0])*distances_numbers[i]
-            full_data[:,data.shape[1]+1] = np.ones(data.shape[0])*core_masses_numbers[i]
+            full_data[:,data.shape[1]+1] = np.ones(data.shape[0])*core_masses_numbers[j]
             first_time = False
         else:
             f_data = np.zeros([data.shape[0],data.shape[1]+2])
             f_data[:,0:data.shape[1]] = data
             f_data[:,data.shape[1]] = np.ones(data.shape[0])*distances_numbers[i]
-            f_data[:,data.shape[1]+1] = np.ones(data.shape[0])*core_masses_numbers[i]
+            f_data[:,data.shape[1]+1] = np.ones(data.shape[0])*core_masses_numbers[j]
             full_data = np.vstack((full_data,f_data))
+
 print '\t Done!\n'
 
 print '\t >> 3. Sampling core masses...'
-times = full_data[:,0]
-Me = full_data[:,1]
-Mj = full_data[:,2]
-Rj = full_data[:,3]
-ds = full_data[:,4]
-cms = full_data[:,5]
-t = 2.49
-m = 0.837
-r = 1.065
-d = 0.03048
-all_distances = np.sqrt((t-times)**2 + (m-Me)**2 + (r-Rj)**2 + (d-ds)**2)
-idx = np.where(np.min(all_distances) == all_distances)[0]
-print cms[idx]
+from scipy.interpolate import griddata
+points = np.zeros([full_data.shape[0],4])
+points[:,0] = full_data[:,0]  # Times in Gyr of the system
+points[:,1] = full_data[:,2]  # Planet mass in Mj
+points[:,2] = full_data[:,3]  # Planet radius in Rj
+points[:,3] = full_data[:,4]  # System distance from central star (assumed solar) in AU
+values = full_data[:,5]       # Core mass in Earth units
+print 't,Mj,Rj,dist'
+print points
+print 'core mass'
+print values
+
+t = 2.0#1.0#4.5
+m = 0.356#3.146#0.837
+r = 0.718#1.217#1.065
+d = 0.04288#0.02#0.03048
+
+grid = griddata(points, values, (t,m,r,d), method='linear')
+print grid
+
 print '\n'
