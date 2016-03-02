@@ -23,6 +23,8 @@ The results will be printed on the console and also all the simulated values wil
 be saved under a `results` folder in case you want to study the resulting 
 distribution of core masses.
 
+Note that the core is assumed to be 50 rock/50 ice.
+
 TODO
 ----
 - Use Gaussian Proccesses to extrapolate values.
